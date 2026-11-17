@@ -1,36 +1,23 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# GCP Auto Marker
 
-## Getting Started
-
-First, run the development server:
+Ground Control Point Interface ที่มาร์กจุดให้อัตโนมัติ แล้ว export เป็น `gcp_list.txt` สำหรับ WebODM / ODM
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
+pnpm dev        # http://localhost:3000
+pnpm test       # รวมการเทียบกับจุดที่มาร์กด้วยมือ (ตั้ง GCP_DATA=<folder> ถ้าข้อมูลอยู่ที่อื่น)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Flow
+1. โหลดพิกัด GCP: เลือกไฟล์หรือพิมพ์เองในรูปแบบ `EPSG:4326` แล้วตามด้วย `name lon lat z` บรรทัดละจุด ค่า z ต้องอยู่ใน datum เดียวกับ AbsoluteAltitude ของโดรน (RTK ใช้ ellipsoidal)
+2. เลือกโฟลเดอร์ภาพ JPG จาก DJI: อ่านในเบราว์เซอร์อย่างเดียว ไม่มีการอัปโหลดออกไปไหน
+3. กด **เริ่มมาร์ก** แล้วตรวจจุดที่ขึ้นสีส้ม ("ควรตรวจ") คลิกภาพเพื่อปรับจุดหรือกด "ไม่ใช้ภาพนี้"
+4. กด **Export gcp_list.txt** จะได้ไฟล์ใน UTM zone ของ GCP (เหมือนที่ WebODM GCP Interface export)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## วิธีมาร์กอัตโนมัติ
+- **Projection** (`src/lib/gcp.ts` → `project`): ใช้ตำแหน่ง RTK, GimbalYaw และ CalibratedFocalLength จาก XMP ของ DJI คำนวณตำแหน่ง GCP บนภาพแบบ pinhole มองตรงลง คลาดเคลื่อนไม่เกินประมาณ 300px
+- **Detection** (`detectTarget`): ในกรอบ ±450px หาเป้า checker แดง-ขาว 2×2 คือช่องแดง 2 ช่องอยู่ทแยงกัน ขนาดใกล้กัน อีกแนวทแยงเป็นสีขาว และรอบเป้าต้องไม่เป็นสีแดง (กันไปจับหลังคา) จุดกึ่งกลางเป้าคือจุดกึ่งกลางระหว่างจุดศูนย์กลางของช่องแดงทั้งสอง
+- **Template matching** (`matchTemplate`): ใช้กับเป้าแบบใดก็ได้ ไม่ต้องเป็นแดง-ขาว เมื่อมาร์กเอง 1 ภาพ ระบบจะตัดภาพรอบจุดนั้นมาเป็น template แล้วหมุนและย่อขยายตามมุม yaw และความสูงของแต่ละภาพ จากนั้นหาด้วย NCC ในภาพอื่นของ GCP เดียวกันที่ยังไม่มีจุดหรือจุดยังไม่แน่นอน ผลที่ NCC ต่ำกว่า 0.6 จะไม่ถูกใช้ และถ้าต่ำกว่า 0.8 จะขึ้นเป็น "ควรตรวจ"
+- ทดสอบกับชุด Bua: 15 จุดที่มาร์กด้วยมือ คลาด ≤ 2px ทุกจุด ทั้ง 99 ภาพหาเป้าเจอ 83 จุด ทุกจุดเป็นเป้าจริง ส่วน template matching ที่ใช้จุดที่มาร์กด้วยมือ 1 จุดเป็นต้นแบบ หาอีก 10 จุดได้คลาด 0.3–1.8px
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+ค่าที่ปรับได้อยู่ใน `src/lib/config.ts` (ขนาดเป้า, รัศมีค้นหา, เกณฑ์ score)
